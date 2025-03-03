@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+/* Animation des boutons */
+button[data-size]:not(:disabled) {
+    transition: transform 0.1s ease;
+}
+
+button[data-size]:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+/* États désactivés */
+button[data-size]:disabled {
+    cursor: not-allowed;
+}
+
+
+.hidden {
+    display: none !important;
+}
+#confirmationModal {
+    display: flex !important;
+    backdrop-filter: blur(3px);
+}
