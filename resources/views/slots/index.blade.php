@@ -1,90 +1,62 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container mx-auto px-4 py-8">
-    <h1 class="text-3xl font-bold text-gray-800 mb-8">Réserver votre Agneau</h1>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        @foreach ($slots as $slot)
-        <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow" data-slot-id="{{ $slot->id }}">
-            <!-- ... -->
-            
-            <!-- Ajouter les champs -->
-            <div class="mt-4">
-                <div class="flex items-center gap-2 mb-3">
-                    <button onclick="document.getElementById('quantity-{{ $slot->id }}').stepDown()" class="px-3 py-1 bg-gray-200 rounded">-</button>
-                    <input id="quantity-{{ $slot->id }}" type="number" value="1" min="1" class="w-20 text-center border rounded">
-                    <button onclick="document.getElementById('quantity-{{ $slot->id }}').stepUp()" class="px-3 py-1 bg-gray-200 rounded">+</button>
+<div class="container py-5">
+    <div class="page-container">
+        <h1 class="text-center mb-5">Réservation d'Agneau pour l'Eid</h1>
+        
+        <!-- Indicateur de progression -->
+        @include('slots.partials.progress')
+        
+        <!-- Étape 1: Sélection du jour -->
+        <div class="step active" id="step-1">
+            <h3 class="mb-4">Étape 1: Choisissez un jour</h3>
+            <div class="row row-cols-1 row-cols-md-3 g-4" id="days-container">
+                @foreach($availableDays as $day)
+                <div class="col">
+                    <div class="card creneaux-jour" data-date="{{ $day['date'] }}">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">{{ $day['label'] }}</h5>
+                            <p class="card-text">
+                                <span class="badge bg-{{ $day['status_color'] }}">
+                                    {{ $day['slots_count'] }} créne{{ $day['slots_count'] > 1 ? 'aux' : 'au' }} disponible
+                                </span>
+                            </p>
+                        </div>
+                    </div>
                 </div>
-
-                <select id="size-{{ $slot->id }}" class="w-full p-2 border rounded mb-3">
-                    <option value="grand">Grand</option>
-                    <option value="moyen">Moyen</option>
-                    <option value="petit">Petit</option>
-                </select>
-
-                <button id="reserveButton-{{ $slot->id }}" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
-                    Réserver
-                </button>
+                @endforeach
             </div>
         </div>
-        @endforeach
+
+        <!-- Étape 2: Sélection de l'heure -->
+        @include('slots.partials.time-selection')
+
+        <!-- Étape 3: Configuration de la commande -->
+        @include('slots.partials.order-config')
+
+        <!-- Étape 4: Paiement -->
+        @include('slots.partials.payment')
+        
+        <!-- Modal de confirmation -->
+        @include('slots.partials.confirmation-modal')
     </div>
 </div>
-
-{{-- js --}}
-
-    @section('scripts')
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                // Récupérer tous les boutons de réservation
-                const slotCards = document.querySelectorAll('[data-slot-id]');
-                
-                slotCards.forEach(card => {
-                    const slotId = card.getAttribute('data-slot-id');
-                    const reserveButton = document.getElementById(`reserveButton-${slotId}`);
-                    
-                    if (reserveButton) {
-                        reserveButton.addEventListener('click', function() {
-                            openReservationModal(slotId);
-                        });
-                    }
-                });
-            });
-            
-            // Fonction pour ouvrir le modal de réservation
-            function openReservationModal(slotId) {
-                const quantityInput = document.getElementById(`quantity-${slotId}`);
-                const sizeSelect = document.getElementById(`size-${slotId}`);
-                
-                if (!quantityInput || !sizeSelect) {
-                    alert('Erreur: Éléments du formulaire non trouvés');
-                    return;
-                }
-                
-                // Récupérer les valeurs
-                const quantity = quantityInput.value;
-                const size = sizeSelect.value;
-                
-                // Stocker les données dans des variables globales pour la soumission
-                window.selectedSlotId = slotId;
-                window.selectedQuantity = quantity;
-                window.selectedSize = size;
-                
-                // Mettre à jour le texte dans le modal
-                document.getElementById('selectedQuantity').textContent = quantity;
-                document.getElementById('selectedSize').textContent = size;
-                
-                // Afficher le modal
-                const modal = document.getElementById('confirmationModal');
-                if (modal) {
-                    modal.classList.remove('hidden');
-                    modal.style.display = 'flex';
-                }
-            }
-        </script>
-    @endsection
-
-{{-- js --}}
-
 @endsection
+
+@section('scripts')
+{{-- Ensuite charger le script spécifique de réservation --}}
+@vite(['resources/js/reservation.js'])
+
+<script>
+    // État global minimal
+    window.reservationState = {
+        currentStep: 1,
+        selectedDay: null,
+        selectedSlot: null,
+        size: 'grand',
+        quantity: 1
+    };
+</script>
+@endsection
+
