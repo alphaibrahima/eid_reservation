@@ -9,6 +9,14 @@ use App\Http\Controllers\ProfileController;
 
 
 
+Route::get('/reservations/confirm', [ReservationController::class, 'confirm'])
+     ->name('reservations.confirm');
+
+
+     Route::get('/payment-return', function() {
+        return redirect()->route('reservations')->with('status', 'Paiement confirmé !');
+    })->name('payment.return');
+
 
 // Routes authentifiées
 Route::middleware(['auth'])->group(function () {
@@ -19,10 +27,10 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-// Route publique pour les créneaux
-Route::get('/slots/{date}', [SlotController::class, 'getAvailableSlots'])
-->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}')
-->name('slots.byDate');
+    // Route publique pour les créneaux
+    Route::get('/slots/{date}', [SlotController::class, 'getAvailableSlots'])
+    ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+    ->name('slots.byDate');
     
     // Vérification téléphone
     Route::get('/verify-phone', [PhoneVerificationController::class, 'show'])->name('verification.notice');

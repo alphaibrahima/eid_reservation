@@ -11,6 +11,7 @@ class Slot extends Model
     use HasFactory;
     protected $fillable = [
         'date',
+        'association_id',
         'start_time',
         'end_time',
     ];
@@ -20,6 +21,11 @@ class Slot extends Model
         'start_time' => 'datetime:H:i',
         'end_time' => 'datetime:H:i',
     ];
+
+    public function association()
+    {
+        return $this->belongsTo(Association::class, 'association_id');
+    }
 
     public function reservations(): HasMany // Type correct
     {

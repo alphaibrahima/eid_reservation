@@ -16,7 +16,8 @@
                 <div class="col">
                     <div class="card creneaux-jour" data-date="{{ $day['date'] }}">
                         <div class="card-body text-center">
-                            <h5 class="card-title">{{ $day['label'] }}</h5>
+                            {{-- <h5 class="card-title">{{ $day['label'] }}</h5> --}}
+                            <h5 class="card-title">{{ ucfirst($day['label']) }}</h5>
                             <p class="card-text">
                                 <span class="badge bg-{{ $day['status_color'] }}">
                                     {{ $day['slots_count'] }} créne{{ $day['slots_count'] > 1 ? 'aux' : 'au' }} disponible

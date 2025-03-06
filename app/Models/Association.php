@@ -17,8 +17,15 @@ class Association extends Model
         'is_active',
     ];
 
+    // Garder la relation existante (une association a plusieurs utilisateurs)
     public function users()
     {
         return $this->hasMany(User::class);
+    }
+
+    // Ajouter la nouvelle relation (une association a un quota)
+    public function quota()
+    {
+        return $this->hasOne(Quota::class);
     }
 }

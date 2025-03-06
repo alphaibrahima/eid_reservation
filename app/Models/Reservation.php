@@ -12,9 +12,13 @@ class Reservation extends Model
     protected $fillable = [
         'user_id', 
         'slot_id', 
+        'association_id', // AJOUTER
         'size', 
+        'quantity', // AJOUTER (si manquant)
         'code', 
-        'status'
+        'status',
+        'date', // AJOUTER (si manquant)
+        'payment_intent_id' // AJOUTER (si manquant)
     ];
 
     public function slot()
@@ -25,6 +29,6 @@ class Reservation extends Model
 
     public function association()
     {
-        return $this->belongsTo(User::class, 'association_id');
+        return $this->belongsTo(Association::class); // MODIFIER (au lieu de User)
     }
 }

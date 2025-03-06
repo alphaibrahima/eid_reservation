@@ -10,15 +10,15 @@ class Quota extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
+        'association_id', // REMPLACER user_id
         'grand',
         'moyen',
-        'petit',
+        'petit'
     ];
 
     // Relation vers l'utilisateur (association)
-    public function user()
+    public function association()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Association::class);
     }
 }

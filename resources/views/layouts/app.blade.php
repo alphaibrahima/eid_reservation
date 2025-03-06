@@ -13,17 +13,17 @@
 
         <meta name="csrf-token" content="{{ csrf_token() }}">
         
-        <script src="https://js.stripe.com/v3/"></script>
+        {{-- <script src="https://js.stripe.com/v3/"></script> --}}
 
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/reservation.js', 'resources/js/app.js'])
-
+        
         <!-- Bootstrap CSS -->
         <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
         <!-- Bootstrap Icons -->
         <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.1/font/bootstrap-icons.min.css" rel="stylesheet">
-
+        
     </head>
     @yield('scripts')
 
@@ -48,11 +48,10 @@
 
         
  
-
-        <!-- Scripts -->
+        <script src="https://js.stripe.com/v3/"></script>
         <script>
-        
-
+            window.STRIPE_PUBLISHABLE_KEY = '{{ config('services.stripe.key') }}';            
+            window.STORE_RESERVATION_URL = '{{ route('reservations.store') }}';
         </script>
     </body>
 </html>

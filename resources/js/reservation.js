@@ -293,25 +293,54 @@ function selectSize(size) {
 // Initialisation Stripe avec gestion des erreurs
 let stripe;
 let cardElement;
+// Charger Stripe de manière asynchrone
+function loadStripe() {
+    return new Promise((resolve, reject) => {
+        if (window.Stripe) {
+            resolve(window.Stripe);
+            return;
+        }
 
+        const script = document.createElement('script');
+        script.src = 'https://js.stripe.com/v3/';
+        script.async = true;
+        
+        script.onload = () => {
+            if (window.Stripe) {
+                resolve(window.Stripe);
+            } else {
+                reject(new Error('Stripe failed to load'));
+            }
+        };
+        
+        script.onerror = () => {
+            reject(new Error('Failed to load Stripe script'));
+        };
+
+        document.head.appendChild(script);
+    });
+}
+
+// Fonction d'initialisation Stripe améliorée
 function initializeStripeElements() {
-    // Vérifier si Stripe est chargé
-    if (typeof Stripe === 'undefined') {
-        console.error('Stripe.js non chargé');
-        return;
-    }
-
     try {
-        // Initialiser Stripe avec votre clé publique
-        stripe = Stripe(window.STRIPE_KEY);
+        // Vérifier que la clé publique est définie
+        if (!window.STRIPE_PUBLISHABLE_KEY) {
+            throw new Error('Clé Stripe publique manquante');
+        }
+
+        // Initialiser Stripe
+        const stripe = Stripe(window.STRIPE_PUBLISHABLE_KEY);
+        
+        // Créer une instance d'éléments Stripe
         const elements = stripe.elements({
             mode: 'payment',
-            currency: 'eur',
-            amount: 20000 // 200€ en centimes
+            amount: 20000, // Ajout de l'amount en centimes
+            currency: 'eur'
         });
 
         // Créer l'élément de carte
-        cardElement = elements.create('card', {
+        const cardElement = elements.create('card', {
             style: {
                 base: {
                     color: '#32325d',
@@ -327,51 +356,66 @@ function initializeStripeElements() {
                     iconColor: '#fa755a'
                 }
             },
-            // Options supplémentaires
-            hidePostalCode: false
+            hidePostalCode: true
         });
 
         // Monter l'élément de carte
         cardElement.mount('#card-element');
 
-        // Gérer les erreurs de validation en temps réel
-        cardElement.addEventListener('change', function(event) {
-            const displayError = document.getElementById('card-errors');
-            if (event.error) {
-                displayError.textContent = event.error.message;
-                displayError.classList.add('alert', 'alert-danger');
-            } else {
-                displayError.textContent = '';
-                displayError.classList.remove('alert', 'alert-danger');
-            }
-        });
+        // Stocker stripe et cardElement globalement
+        window.stripe = stripe;
+        window.cardElement = cardElement;
+
+        console.log('Stripe initialisé avec succès');
     } catch (error) {
-        console.error('Erreur Stripe:', error);
-        alert('Erreur d\'initialisation du paiement. Veuillez réessayer.');
+        console.error('Erreur d\'initialisation Stripe:', error);
+        
+        // Afficher un message à l'utilisateur
+        const paymentSection = document.querySelector('#payment-section');
+        if (paymentSection) {
+            paymentSection.innerHTML = `
+                <div class="alert alert-warning">
+                    Le système de paiement est temporairement indisponible. 
+                    Veuillez réessayer plus tard ou contacter le support.
+                </div>
+            `;
+        }
+        
+        // Lever une erreur pour être sûr que le paiement ne peut pas être traité
+        throw error;
     }
 }
 
-// Processus de paiement
+// Modifier processPayment pour utiliser les variables globales
 async function processPayment() {
-    // Validation des informations
+    // Vérifier que Stripe est initialisé
+    if (!window.stripe || !window.cardElement) {
+        try {
+            await initializeStripeElements();
+        } catch (initError) {
+            alert('Impossible d\'initialiser le paiement. Veuillez réessayer.');
+            return;
+        }
+    }
+
+    // Reste de votre logique de paiement existante
     const nomTitulaire = document.getElementById('cardholder-name').value;
     const emailTitulaire = document.getElementById('cardholder-email').value;
-
+    
     if (!nomTitulaire || !emailTitulaire) {
         alert('Veuillez remplir le nom et l\'email du titulaire');
         return;
     }
 
-    // Désactiver le bouton de paiement pendant le traitement
-    const paymentButton = document.getElementById('confirm-payment-btn');
+    const paymentButton = document.getElementById('submit-payment');
     paymentButton.disabled = true;
     paymentButton.innerHTML = 'Traitement en cours...';
 
     try {
-        // Créer le méthode de paiement
-        const {error, paymentMethod} = await stripe.createPaymentMethod({
+        // Utiliser les variables globales
+        const { error, paymentMethod } = await window.stripe.createPaymentMethod({
             type: 'card',
-            card: cardElement,
+            card: window.cardElement,
             billing_details: {
                 name: nomTitulaire,
                 email: emailTitulaire
@@ -379,69 +423,238 @@ async function processPayment() {
         });
 
         if (error) {
-            // Gérer les erreurs Stripe
             const errorElement = document.getElementById('card-errors');
             errorElement.textContent = error.message;
             errorElement.classList.add('alert', 'alert-danger');
             
-            // Réactiver le bouton
             paymentButton.disabled = false;
-            paymentButton.innerHTML = 'Confirmer et Payer';
+            paymentButton.innerHTML = 'Confirmer et payer l\'acompte de 200€';
             return;
         }
 
-        // Envoi des données de réservation et de paiement
+        // Reste de votre logique de paiement...
+        const reservationData = {
+            ...window.reservationState,
+            payment_method_id: paymentMethod.id,
+            amount: 20000,
+            selectedDay: window.reservationState.selectedDay,
+            selectedSlot: window.reservationState.selectedSlot,
+            size: window.reservationState.size,
+            quantity: window.reservationState.quantity
+        };
+
         const response = await fetch(window.STORE_RESERVATION_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
             },
-            body: JSON.stringify({
-                ...window.reservationState,
-                payment_method_id: paymentMethod.id,
-                amount: 20000, // 200€ en centimes
-                description: 'Acompte Réservation Agneau'
-            })
+            body: JSON.stringify(reservationData)
         });
 
         const result = await response.json();
-
         if (response.ok) {
-            // Succès du paiement
-            showConfirmationModal(result.reservation_number);
+            showConfirmationModal(result);
         } else {
-            // Erreur côté serveur
             throw new Error(result.message || 'Échec du paiement');
         }
     } catch (error) {
         console.error('Erreur de paiement:', error);
         alert('Erreur de paiement : ' + error.message);
     } finally {
-        // Réactiver le bouton
         paymentButton.disabled = false;
-        paymentButton.innerHTML = 'Confirmer et Payer';
+        paymentButton.innerHTML = 'Confirmer et payer l\'acompte de 200€';
     }
 }
 
 // Initialisation au chargement du document
-document.addEventListener('DOMContentLoaded', () => {
-    // Charger Stripe uniquement si disponible
-    if (window.Stripe) {
-        initializeStripeElements();
-    } else {
-        console.warn('Stripe.js non chargé');
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        await initializeStripeElements();
+    } catch (error) {
+        console.error('Erreur lors de l\'initialisation de Stripe', error);
     }
 });
+// function initializeStripeElements() {
+//     console.log('Initializing Stripe'); // Debug log
+//     console.log('Stripe available:', !!window.Stripe); // Vérifier si Stripe est chargé
+//     console.log('Stripe Publishable Key:', window.STRIPE_PUBLISHABLE_KEY); // Vérifier la clé
+
+//     if (typeof Stripe === 'undefined' || !window.STRIPE_PUBLISHABLE_KEY) {
+//         console.error('Stripe.js non chargé ou clé manquante');
+//         alert('Erreur de configuration du paiement. Contactez le support.');
+//         return;
+//     }
+
+//     try {
+//         // Initialiser Stripe avec la clé publique
+//         stripe = Stripe(window.STRIPE_PUBLISHABLE_KEY);
+        
+//         // Créer une instance d'éléments Stripe
+//         const elements = stripe.elements({
+//             mode: 'payment',
+//             currency: 'eur'
+//         });
+
+//         // Créer l'élément de carte
+//         cardElement = elements.create('card', {
+//             style: {
+//                 base: {
+//                     color: '#32325d',
+//                     fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
+//                     fontSmoothing: 'antialiased',
+//                     fontSize: '16px',
+//                     '::placeholder': { 
+//                         color: '#aab7c4' 
+//                     }
+//                 },
+//                 invalid: { 
+//                     color: '#fa755a',
+//                     iconColor: '#fa755a'
+//                 }
+//             },
+//             hidePostalCode: true
+//         });
+
+//         // Monter l'élément de carte
+//         cardElement.mount('#card-element');
+        
+//         console.log('Stripe initialisé avec succès'); // Debug log
+//     } catch (error) {
+//         console.error('Erreur Stripe détaillée:', error);
+//         alert('Erreur d\'initialisation du paiement. Détails en console.');
+//     }
+// }
+
+// // Ajouter des vérifications supplémentaires au chargement
+// document.addEventListener('DOMContentLoaded', () => {
+//     console.log('DOM chargé'); // Debug log
+    
+//     // Vérification de la disponibilité de Stripe
+//     if (window.Stripe) {
+//         initializeStripeElements();
+//     } else {
+//         console.warn('Stripe.js non chargé. Réessayez.');
+//         document.querySelector('#payment-section').innerHTML = 
+//             '<div class="alert alert-warning">Le système de paiement est temporairement indisponible.</div>';
+//     }
+// });
+
+// // Processus de paiement
+// async function processPayment() {
+//     // Validation des informations
+//     const nomTitulaire = document.getElementById('cardholder-name').value;
+//     const emailTitulaire = document.getElementById('cardholder-email').value;
+    
+//     if (!nomTitulaire || !emailTitulaire) {
+//         alert('Veuillez remplir le nom et l\'email du titulaire');
+//         return;
+//     }
+
+//     // Vérifier que Stripe et cardElement sont initialisés
+//     if (!stripe || !cardElement) {
+//         console.error('Stripe ou cardElement non initialisé');
+//         alert('Erreur de paiement : Stripe non configuré');
+//         return;
+//     }
+
+//     // Désactiver le bouton de paiement pendant le traitement
+//     const paymentButton = document.getElementById('submit-payment');
+//     paymentButton.disabled = true;
+//     paymentButton.innerHTML = 'Traitement en cours...';
+
+//     try {
+//         // Créer la méthode de paiement
+//         const {error, paymentMethod} = await stripe.createPaymentMethod({
+//             type: 'card',
+//             card: cardElement,
+//             billing_details: {
+//                 name: nomTitulaire,
+//                 email: emailTitulaire
+//             }
+//         });
+
+//         if (error) {
+//             // Gérer les erreurs Stripe
+//             const errorElement = document.getElementById('card-errors');
+//             errorElement.textContent = error.message;
+//             errorElement.classList.add('alert', 'alert-danger');
+            
+//             // Réactiver le bouton
+//             paymentButton.disabled = false;
+//             paymentButton.innerHTML = 'Confirmer et payer l\'acompte de 200€';
+//             return;
+//         }
+
+//         // Préparer les données de réservation
+//         const reservationData = {
+//             ...window.reservationState,
+//             payment_method_id: paymentMethod.id,
+//             amount: 20000, // 200€ en centimes
+//             selectedDay: window.reservationState.selectedDay,
+//             selectedSlot: window.reservationState.selectedSlot,
+//             size: window.reservationState.size,
+//             quantity: window.reservationState.quantity
+//         };
+
+//         // Envoi des données de réservation et de paiement
+//         const response = await fetch(window.STORE_RESERVATION_URL, {
+//             method: 'POST',
+//             headers: {
+//                 'Content-Type': 'application/json',
+//                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+//             },
+//             body: JSON.stringify(reservationData)
+//         });
+
+//         const result = await response.json();
+
+//         if (response.ok) {
+//             // Succès du paiement
+//             showConfirmationModal(result.reservation_number);
+//         } else {
+//             // Erreur côté serveur
+//             throw new Error(result.message || 'Échec du paiement');
+//         }
+//     } catch (error) {
+//         console.error('Erreur de paiement:', error);
+//         alert('Erreur de paiement : ' + error.message);
+//     } finally {
+//         // Réactiver le bouton
+//         paymentButton.disabled = false;
+//         paymentButton.innerHTML = 'Confirmer et payer l\'acompte de 200€';
+//     }
+// }
+
+// // Initialisation au chargement du document
+// document.addEventListener('DOMContentLoaded', () => {
+//     // Charger Stripe uniquement si disponible
+//     if (window.Stripe) {
+//         initializeStripeElements();
+//     } else {
+//         console.warn('Stripe.js non chargé');
+//     }
+// });
 
 // Exposer les fonctions globalement
 window.processPayment = processPayment;
 
 
 // Affichage de la modal de confirmation
-function showConfirmationModal() {
+function showConfirmationModal(reservationData) {
     const modal = new bootstrap.Modal('#confirmationModal');
-    document.getElementById('confirmation-number').textContent = 'R-' + Date.now();
+    
+    // Mettre à jour dynamiquement les informations dans la modal
+    document.getElementById('confirmation-number').textContent = reservationData.details.reservation_number;
+    document.getElementById('confirmation-day').textContent = reservationData.details.day;
+    document.getElementById('confirmation-time').textContent = reservationData.details.time;
+    document.getElementById('confirmation-size').textContent = 
+        reservationData.details.size === 'petit' ? 'Petit (~10kg)' :
+        reservationData.details.size === 'moyen' ? 'Moyen (~15kg)' : 
+        'Grand (~25kg)';
+    document.getElementById('confirmation-quantity').textContent = reservationData.details.quantity;
+    
+    // Afficher la modal
     modal.show();
 }
 
@@ -460,6 +673,24 @@ document.addEventListener('DOMContentLoaded', () => {
             handleDaySelection(fullDate);
         }
     });
+});
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Sélectionner le bouton de paiement
+    const submitPaymentButton = document.getElementById('submit-payment');
+    
+    if (submitPaymentButton) {
+        submitPaymentButton.addEventListener('click', function(event) {
+            event.preventDefault(); // Empêcher la soumission par défaut
+            processPayment(); // Appeler la fonction de paiement
+        });
+    }
+
+    // Initialisation Stripe conditionnelle
+    if (typeof Stripe !== 'undefined') {
+        initializeStripeElements();
+    }
 });
 
 // Exposition des fonctions globales

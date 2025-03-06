@@ -56,7 +56,7 @@ class User extends Authenticatable
 
     public function association()
     {
-        return $this->belongsTo(User::class, 'association_id');
+        return $this->belongsTo(Association::class); // Au lieu de User
     }
     
     public function buyers()
