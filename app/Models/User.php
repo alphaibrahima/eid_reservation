@@ -57,6 +57,12 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
+    // Vérifier si l'utilisateur a le rôle 'association'
+    public function isAssociation()
+    {
+        return $this->role === 'association';  // Vérifie que le rôle est bien 'association'
+    }
+
     public function association()
     {
         return $this->belongsTo(Association::class); // Au lieu de User
