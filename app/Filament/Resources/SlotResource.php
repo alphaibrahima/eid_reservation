@@ -32,17 +32,7 @@ class SlotResource extends Resource
     {
         return $form
             ->schema([
-                // Sélection de l'association
-                // Forms\Components\Select::make('association_id')
-                //     ->label('Association')
-                //     ->relationship(
-                //         name: 'association',
-                //         titleAttribute: 'name'
-                //     )
-                //     ->required()
-                //     ->searchable()
-                //     ->preload()
-                //     ->native(false),
+
 
                 // Date et heures
                 Forms\Components\DatePicker::make('date')
@@ -76,19 +66,6 @@ class SlotResource extends Resource
                             ])
                             ->default(60)
                             ->required(),
-
-                        // Forms\Components\TimePicker::make('pause_start')
-                        //     ->label('Début de pause')
-                        //     ->seconds(false)
-                        //     ->minutesStep(15)
-                        //     ->nullable(),
-
-                        // Forms\Components\TimePicker::make('pause_end')
-                        //     ->label('Fin de pause')
-                        //     ->seconds(false)
-                        //     ->minutesStep(15)
-                        //     ->nullable()
-                        //     ->after('pause_start'),
                     ]),
 
                 // Bouton de génération
@@ -145,16 +122,6 @@ class SlotResource extends Resource
                             while ($current < $end) {
                                 $slotEnd = $current->copy()->addMinutes($data['duration']);
 
-                                // Gestion de la pause
-                                // if ($data['pause_start'] && $data['pause_end']) {
-                                //     $pauseStart = Carbon::parse($data['pause_start']);
-                                //     $pauseEnd = Carbon::parse($data['pause_end']);
-                                    
-                                //     if ($current->between($pauseStart, $pauseEnd)) {
-                                //         $current = $pauseEnd;
-                                //         continue;
-                                //     }
-                                // }
 
                                 if ($slotEnd > $end) break;
 
@@ -196,12 +163,7 @@ class SlotResource extends Resource
                     
                 Tables\Columns\TextColumn::make('end_time')
                     ->time('H:i')
-                    ->label('Fin'),
-                    
-                // Tables\Columns\TextColumn::make('association.name')
-                //     ->label('Association')
-                //     ->searchable()
-                //     ->sortable(),
+                    ->label('Fin'),    
                     
                 Tables\Columns\IconColumn::make('available')
                     ->label('Dispo')
@@ -212,10 +174,6 @@ class SlotResource extends Resource
                     ->counts('reservations'),
             ])
             ->filters([
-                // Tables\Filters\SelectFilter::make('association')
-                //     ->relationship('association', 'name')
-                //     ->searchable(),
-                    
                 Tables\Filters\Filter::make('date')
                     ->form([
                         Forms\Components\DatePicker::make('from')

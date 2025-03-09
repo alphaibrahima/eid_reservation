@@ -14,17 +14,10 @@ return new class extends Migration {
             $table->time('end_time');
             $table->integer('max_reservations')->default(50);
             $table->boolean('available')->default(true);
-            
-            // // Clé étrangère optimisée
-            // $table->foreignId('association_id')
-            //     ->constrained('users')
-            //     ->onDelete('cascade');
-
             $table->timestamps();
             
             // Index pour performances
             $table->index(['date', 'available']);
-            // $table->index(['association_id', 'date']);
         });
     }
 

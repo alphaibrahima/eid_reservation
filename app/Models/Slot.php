@@ -12,12 +12,11 @@ class Slot extends Model
     use HasFactory;
 
     protected $fillable = [
-        'date',
-        // 'association_id',
+        'date', 
         'start_time',
         'end_time',
-        'max_reservations', // Ajouté depuis la migration
-        'available' // Ajouté depuis la migration
+        'max_reservations', 
+        'available' 
     ];
 
     protected $casts = [
@@ -27,11 +26,7 @@ class Slot extends Model
         'available' => 'boolean',
     ];
 
-    // // Relation CORRIGÉE
-    // public function association(): BelongsTo
-    // {
-    //     return $this->belongsTo(User::class, 'association_id');
-    // }
+
 
     public function reservations(): HasMany
     {
