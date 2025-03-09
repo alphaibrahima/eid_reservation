@@ -2,100 +2,161 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Forms;
-use Filament\Tables;
+use App\Filament\Resources\AcheteurResource\Pages;
 use App\Models\User;
+use Filament\Forms;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
 use Filament\Resources\Resource;
+use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Database\Eloquent\Builder;
-use App\Filament\Resources\AcheteurResource\Pages;
-
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Actions\EditAction;
 
 class AcheteurResource extends Resource
 {
     protected static ?string $model = User::class;
-    protected static ?string $navigationIcon = 'heroicon-o-users';
-    protected static ?string $navigationLabel = 'Tous les acheteurs';
+    protected static ?string $navigationIcon = 'heroicon-o-user';
+    protected static ?string $navigationLabel = 'Acheteurs';
     protected static ?string $modelLabel = 'Acheteur';
-    protected static ?string $pluralModelLabel = 'Liste de tous les acheteurs';
-    protected static ?string $navigationGroup = 'Acheteurs';
+    protected static ?string $pluralModelLabel = 'Acheteurs';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('name')
-                    ->label('Nom complet')
-                    ->required(),
-                    
-                Forms\Components\TextInput::make('email')
-                    ->email()
-                    ->required()
-                    ->unique(ignoreRecord: true),
-                    
-                Forms\Components\TextInput::make('phone')
-                    ->label('Téléphone')
-                    ->tel()
-                    ->nullable(),
-                    
-                Forms\Components\Hidden::make('role')
-                    ->default('buyer'),
-                    
-                Forms\Components\Select::make('association_id')
-                    ->label('Association')
-                    ->relationship(
-                        name: 'association',
-                        titleAttribute: 'name',
-                        modifyQueryUsing: fn(Builder $query) => $query->where('role', 'association')
-                    )
-                    ->searchable()
-                    ->preload()
-                    ->required()
-                    ->native(false),
-                    
-                Forms\Components\Toggle::make('is_active')
-                    ->label('Compte actif')
-                    ->default(true),
-                    
-                Forms\Components\TextInput::make('password')
-                    ->password()
-                    ->required(fn(string $operation): bool => $operation === 'create')
-                    ->dehydrated(fn(?string $state): bool => filled($state)),
+                Forms\Components\Section::make('Informations personnelles')
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('name')
+                            ->label('Nom complet')
+                            ->required(),
+                            
+                        TextInput::make('email')
+                            ->email()
+                            ->required()
+                            ->unique(ignoreRecord: true),
+                    ]),
+
+                Forms\Components\Section::make('Coordonnées')
+                    ->schema([
+                        Grid::make(2)
+                            ->schema([
+                                Select::make('country_code')
+                                    ->label('Indicatif pays')
+                                    ->options(collect(config('countries.phone_codes'))->mapWithKeys(
+                                        fn ($item) => [$item['code'] => "+{$item['code']} ({$item['name']})"]
+                                    ))
+                                    ->searchable()
+                                    ->reactive()
+                                    ->required()
+                                    ->afterStateUpdated(function ($state, Set $set) {
+                                        $set('phone_mask', self::getPhoneMask($state));
+                                        $set('phone_example', self::getPhoneExample($state));
+                                    }),
+
+                                TextInput::make('local_phone')
+                                    ->label('Numéro local')
+                                    ->required()
+                                    ->mask(fn (Get $get) => $get('phone_mask'))
+                                    ->rules([
+                                        function (Get $get) {
+                                            return function ($attr, $value, $fail) use ($get) {
+                                                $code = $get('country_code');
+                                                $country = collect(config('countries.phone_codes'))
+                                                    ->firstWhere('code', $code);
+                                                
+                                                if ($country && !preg_match($country['pattern'], $code . preg_replace('/\D/', '', $value))) {
+                                                    $fail("Format invalide pour {$country['name']}");
+                                                }
+                                            };
+                                        }
+                                    ])
+                            ]),
+                            
+                        TextInput::make('address')
+                            ->label('Adresse')
+                            ->columnSpanFull(),
+                    ]),
+
+                Forms\Components\Section::make('Paramètres')
+                    ->schema([
+                        Forms\Components\Hidden::make('role')
+                            ->default('buyer'),
+                            
+                        Select::make('association_id')
+                            ->label('Association affiliée')
+                            ->relationship('association', 'name')
+                            ->searchable()
+                            ->preload()
+                            ->required(),
+                            
+                        Forms\Components\Toggle::make('is_active')
+                            ->label('Compte actif')
+                            ->default(true),
+                            
+                        TextInput::make('password')
+                            ->password()
+                            ->required(fn ($operation) => $operation === 'create')
+                            ->confirmed()
+                            ->dehydrated(fn ($state) => filled($state))
+                            ->maxLength(255),
+                            
+                        TextInput::make('password_confirmation')
+                            ->password()
+                            ->dehydrated(false)
+                            ->visible(fn ($operation) => $operation === 'create'),
+                    ])
             ]);
+    }
+
+    private static function getPhoneMask(?string $countryCode): ?string
+    {
+        $country = collect(config('countries.phone_codes'))->firstWhere('code', $countryCode);
+        return $country['mask'] ?? null;
+    }
+
+    private static function getPhoneExample(?string $countryCode): ?string
+    {
+        $country = collect(config('countries.phone_codes'))->firstWhere('code', $countryCode);
+        return $country['example'] ?? null;
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
+                TextColumn::make('name')
                     ->label('Nom')
                     ->searchable(),
                     
-                Tables\Columns\TextColumn::make('association.name')
-                    ->label('Association')
-                    ->sortable(),
+                TextColumn::make('formatted_phone')
+                    ->label('Téléphone'),
                     
-                Tables\Columns\IconColumn::make('is_active')
-                    ->label('Actif')
-                    ->boolean(),
+                TextColumn::make('association.name')
+                    ->label('Association'),
                     
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->label('Créé le')
-                    ->dateTime('d/m/Y H:i'),
+                    ->dateTime('d/m/Y'),
             ])
             ->filters([
-                Tables\Filters\SelectFilter::make('association')
+                SelectFilter::make('association')
                     ->relationship('association', 'name')
                     ->searchable()
                     ->preload(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
             ])
-            ->modifyQueryUsing(fn(Builder $query) => $query->where('role', 'buyer'));
+            ->modifyQueryUsing(fn (Builder $query) => $query->where('role', 'buyer'));
     }
 
     public static function getPages(): array

@@ -2,105 +2,75 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-
-
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'name',
         'email',
         'password',
-        'phone', // Ajouter
-        'contact_phone', 
+        'phone',
+        'contact_phone',
         'address',
         'registration_number',
         'role',
         'association_id',
-        'is_active', // Ajoute cette ligne
+        'is_active',
     ];
 
-    // Optionnel : Valeur par défaut
-    protected $attributes = [];
-
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
-        'phone_verified' => 'boolean',
         'password' => 'hashed',
     ];
 
-    // Vérifier si l'utilisateur a le rôle 'association'
-    public function isAssociation()
+    protected static function booted(): void
     {
-        return $this->role === 'association';  // Vérifie que le rôle est bien 'association'
+        static::saving(function (User $user) {
+            $user->phone = preg_replace('/[^\d]/', '', $user->phone);
+        });
     }
 
-    // public function association()
-    // {
-    //     return $this->belongsTo(Association::class); // Au lieu de User
-    // }
+    protected function formattedPhone(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->phone ? $this->format_phone_number($this->phone) : null
+        );
+    }
 
-    public function association()
+    private function format_phone_number($phone): string
+    {
+        foreach (config('countries.phone_codes') as $country) {
+            if (str_starts_with($phone, $country['code'])) {
+                $local = substr($phone, strlen($country['code']));
+                return '+' . $country['code'] . ' ' . chunk_split($local, 2, ' ');
+            }
+        }
+        return $phone;
+    }
+
+    public function association(): BelongsTo
     {
         return $this->belongsTo(User::class, 'association_id')
             ->where('role', 'association');
     }
-    
-    public function buyers()
-    {
-        return $this->hasMany(User::class, 'association_id');
-    }
 
-    // Ajoute cette méthode pour la relation
-    public function quota()
+    public function buyers(): HasMany
     {
-        return $this->hasOne(Quota::class);
-    }
-
-    // Relation inverse CORRIGÉE
-    public function slots(): HasMany
-    {
-        return $this->hasMany(Slot::class, 'association_id');
-    }
-
-
-    // methode ajouté pour la gestion des acheteurs au niveua du tableau de bord filament
-    // Dans app/Models/User.php
-    public function getFilamentNameAttribute(): string
-    {
-        return "{$this->name} (Acheteur)";
-    }
-
-    public function scopeBuyers($query)
-    {
-        return $query->where('role', 'buyer');
+        return $this->hasMany(User::class, 'association_id')
+            ->where('role', 'buyer');
     }
 }

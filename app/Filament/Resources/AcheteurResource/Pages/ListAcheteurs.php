@@ -13,7 +13,8 @@ class ListAcheteurs extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make() // AJOUTER CETTE LIGNE
+                ->label('Nouvel Acheteur'),
         ];
     }
 }

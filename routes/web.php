@@ -6,7 +6,8 @@ use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\Auth\PhoneVerificationController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ProfileController;
-
+use Illuminate\Support\Facades\Auth; 
+// Désactiver les routes de vérification email par défaut
 
 
 Route::get('/reservations/confirm', [ReservationController::class, 'confirm'])

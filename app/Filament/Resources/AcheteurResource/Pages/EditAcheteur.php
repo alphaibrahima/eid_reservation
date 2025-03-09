@@ -10,10 +10,10 @@ class EditAcheteur extends EditRecord
 {
     protected static string $resource = AcheteurResource::class;
 
-    protected function getHeaderActions(): array
+    protected function mutateFormDataBeforeSave(array $data): array
     {
-        return [
-            Actions\DeleteAction::make(),
-        ];
+        $data['phone'] = $data['country_code'] . preg_replace('/\D/', '', $data['local_phone']);
+        unset($data['country_code'], $data['local_phone']);
+        return $data;
     }
 }
