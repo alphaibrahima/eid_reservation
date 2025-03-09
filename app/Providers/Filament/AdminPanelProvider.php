@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Resources\AcheteurResource;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -27,8 +28,20 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->brandName('Gestion des Réservations')
+            ->favicon(asset('images/favicon.ico')) // Optionnel : ajoutez un favicon
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Sky, // Changement de couleur pour plus de professionnalisme
+                'secondary' => Color::Emerald,
+            ])
+            ->navigationGroups([
+                'Utilisateurs',
+                'Gestion des Créneaux',
+                'Paramètres'
+            ])
+            ->resources([
+                AcheteurResource::class, // Ajout explicite de la ressource
+                // ... autres ressources ici
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
@@ -53,6 +66,9 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            ->databaseTransactions() // Active les transactions de base de données
+            ->sidebarCollapsibleOnDesktop() // Menu pliable sur desktop
+            ->globalSearchKeyBindings(['command+k', 'ctrl+k']); // Raccourci recherche
     }
 }

@@ -63,9 +63,15 @@ class User extends Authenticatable
         return $this->role === 'association';  // Vérifie que le rôle est bien 'association'
     }
 
+    // public function association()
+    // {
+    //     return $this->belongsTo(Association::class); // Au lieu de User
+    // }
+
     public function association()
     {
-        return $this->belongsTo(Association::class); // Au lieu de User
+        return $this->belongsTo(User::class, 'association_id')
+            ->where('role', 'association');
     }
     
     public function buyers()
@@ -83,5 +89,18 @@ class User extends Authenticatable
     public function slots(): HasMany
     {
         return $this->hasMany(Slot::class, 'association_id');
+    }
+
+
+    // methode ajouté pour la gestion des acheteurs au niveua du tableau de bord filament
+    // Dans app/Models/User.php
+    public function getFilamentNameAttribute(): string
+    {
+        return "{$this->name} (Acheteur)";
+    }
+
+    public function scopeBuyers($query)
+    {
+        return $query->where('role', 'buyer');
     }
 }
