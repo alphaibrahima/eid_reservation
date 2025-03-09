@@ -26,7 +26,7 @@ class AssociationResource extends Resource
                     ->email()
                     ->required()
                     ->unique(ignoreRecord: true),
-                Forms\Components\TextInput::make('contact_phone')->required(),
+                Forms\Components\TextInput::make('phone')->required(),
                 Forms\Components\Textarea::make('address')->required(),
                 Forms\Components\TextInput::make('registration_number'),
             ]);
