@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\AcheteurResource\Pages;
 use App\Models\User;
 use Filament\Forms;
+use Filament\Tables;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Forms\Form;
@@ -12,20 +12,55 @@ use Filament\Tables\Table;
 use Filament\Resources\Resource;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Select;
+use Filament\Navigation\NavigationItem;
 use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Actions\EditAction;
+use App\Filament\Resources\AcheteurResource\Pages;
 
 class AcheteurResource extends Resource
 {
     protected static ?string $model = User::class;
-    protected static ?string $navigationIcon = 'heroicon-o-user';
+    protected static ?string $navigationIcon = 'heroicon-o-user-group';
     protected static ?string $navigationLabel = 'Acheteurs';
     protected static ?string $modelLabel = 'Acheteur';
     protected static ?string $pluralModelLabel = 'Acheteurs';
+    protected static ?string $navigationGroup = 'Acheteurs';
+
+    protected static ?int $navigationSort = 2;
+
+
+    protected static bool $shouldRegisterNavigation = true;
+
+    public static function getNavigationItems(): array
+    {
+        return [
+            NavigationItem::make('Tous les acheteurs')
+                ->url(static::getUrl('index'))
+                ->icon('heroicon-o-table-cells')
+                ->isActiveWhen(fn () => request()->routeIs(static::getRouteBaseName() . '.index')),
+    
+            NavigationItem::make('Ajouter un acheteur')
+                ->url(static::getUrl('create'))
+                ->icon('heroicon-o-plus-circle')
+                ->isActiveWhen(fn () => request()->routeIs(static::getRouteBaseName() . '.create')),
+        ];
+    }
+    
+    
+
+
+
+
+    public static function getSlug(): string
+    {
+        return 'acheteurs';
+    }
+    
+    
 
     public static function form(Form $form): Form
     {
@@ -48,14 +83,17 @@ class AcheteurResource extends Resource
                     ->schema([
                         Grid::make(2)
                             ->schema([
+                                // select
                                 Select::make('country_code')
-                                    ->label('Indicatif pays')
-                                    ->options(collect(config('countries.phone_codes'))->mapWithKeys(
+                                ->label('Indicatif pays')
+                                ->options(
+                                    collect(config('countries.phone_codes'))->mapWithKeys(
                                         fn ($item) => [$item['code'] => "+{$item['code']} ({$item['name']})"]
-                                    ))
-                                    ->searchable()
-                                    ->reactive()
-                                    ->required()
+                                    )
+                                )
+                                ->searchable()
+                                ->reactive()
+                                ->required()
                                     ->afterStateUpdated(function ($state, Set $set) {
                                         $set('phone_mask', self::getPhoneMask($state));
                                         $set('phone_example', self::getPhoneExample($state));
@@ -116,18 +154,6 @@ class AcheteurResource extends Resource
             ]);
     }
 
-    private static function getPhoneMask(?string $countryCode): ?string
-    {
-        $country = collect(config('countries.phone_codes'))->firstWhere('code', $countryCode);
-        return $country['mask'] ?? null;
-    }
-
-    private static function getPhoneExample(?string $countryCode): ?string
-    {
-        $country = collect(config('countries.phone_codes'))->firstWhere('code', $countryCode);
-        return $country['example'] ?? null;
-    }
-
     public static function table(Table $table): Table
     {
         return $table
@@ -166,5 +192,17 @@ class AcheteurResource extends Resource
             'create' => Pages\CreateAcheteur::route('/create'),
             'edit' => Pages\EditAcheteur::route('/{record}/edit'),
         ];
+    }
+
+    private static function getPhoneMask(?string $countryCode): ?string
+    {
+        $country = collect(config('countries.phone_codes'))->firstWhere('code', $countryCode);
+        return $country['mask'] ?? null;
+    }
+
+    private static function getPhoneExample(?string $countryCode): ?string
+    {
+        $country = collect(config('countries.phone_codes'))->firstWhere('code', $countryCode);
+        return $country['example'] ?? null;
     }
 }

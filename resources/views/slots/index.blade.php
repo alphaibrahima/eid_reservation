@@ -5,7 +5,6 @@
     <div class="page-container">
         <h1 class="text-center mb-5">Réservation d'Agneau pour l'Eid</h1>
         
-        <!-- Indicateur de progression -->
         @include('slots.partials.progress')
         
         <!-- Étape 1: Sélection du jour -->
@@ -14,9 +13,10 @@
             <div class="row row-cols-1 row-cols-md-3 g-4" id="days-container">
                 @foreach($availableDays as $day)
                 <div class="col">
-                    <div class="card creneaux-jour" data-date="{{ $day['date'] }}">
+                    <div class="card creneaux-jour" 
+                         data-date="{{ $day['date'] }}"
+                         onclick="handleDaySelection('{{ $day['date'] }}')">
                         <div class="card-body text-center">
-                            {{-- <h5 class="card-title">{{ $day['label'] }}</h5> --}}
                             <h5 class="card-title">{{ ucfirst($day['label']) }}</h5>
                             <p class="card-text">
                                 <span class="badge bg-{{ $day['status_color'] }}">
@@ -30,27 +30,17 @@
             </div>
         </div>
 
-        <!-- Étape 2: Sélection de l'heure -->
         @include('slots.partials.time-selection')
-
-        <!-- Étape 3: Configuration de la commande -->
         @include('slots.partials.order-config')
-
-        <!-- Étape 4: Paiement -->
         @include('slots.partials.payment')
-        
-        <!-- Modal de confirmation -->
         @include('slots.partials.confirmation-modal')
     </div>
 </div>
 @endsection
 
 @section('scripts')
-{{-- Ensuite charger le script spécifique de réservation --}}
-@vite(['resources/js/reservation.js'])
-
 <script>
-    // État global minimal
+    // Configuration globale
     window.reservationState = {
         currentStep: 1,
         selectedDay: null,
@@ -58,6 +48,11 @@
         size: 'grand',
         quantity: 1
     };
-</script>
-@endsection
 
+    // URLs API
+    window.SLOTS_URL = '{{ route("slots.by_date", ["date" => "__date__"]) }}'.replace('__date__', '');
+    window.STORE_RESERVATION_URL = '{{ route("reservations.store") }}';
+</script>
+
+@vite(['resources/js/reservation.js'])
+@endsection

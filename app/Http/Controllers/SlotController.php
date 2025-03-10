@@ -44,26 +44,21 @@ class SlotController extends Controller
     public function getAvailableSlots($date)
     {
         try {
-            // Valider le format de date
-            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
-                return response()->json(['error' => 'Format de date invalide'], 400);
-            }
-    
-            $slots = Slot::where('date', $date)
+            // Validation de la date
+            \Log::info("Tentative de récupération des créneaux pour : ".$date);
+            $date = Carbon::createFromFormat('Y-m-d', $date);
+            
+            $slots = Slot::where('date', $date->format('Y-m-d'))
                        ->where('available', true)
                        ->where('max_reservations', '>', 0)
-                       ->get();
-    
-            if($slots->isEmpty()) {
-                return response()->json(['error' => 'Aucun créneau disponible'], 404);
-            }
-    
+                       ->get(['id', 'start_time', 'max_reservations']);
+
             return response()->json($slots);
-    
+
         } catch (\Exception $e) {
             return response()->json([
-                'error' => 'Erreur serveur : ' . $e->getMessage()
-            ], 500);
+                'error' => 'Date invalide ou erreur serveur : ' . $e->getMessage()
+            ], 400);
         }
     }
 }

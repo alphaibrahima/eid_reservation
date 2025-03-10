@@ -10,11 +10,20 @@ use Illuminate\Support\Facades\Auth;
 // Désactiver les routes de vérification email par défaut
 
 
+// Slots
+Route::get('/slots/{date}', [SlotController::class, 'getAvailableSlots'])
+     ->name('slots.by_date') // <-- Nommer la route
+     ->where('date', '\d{4}-\d{2}-\d{2}');
+
+// Reservations
+Route::post('/reservations', [ReservationController::class, 'store'])
+     ->name('reservations.store');
+
 Route::get('/reservations/confirm', [ReservationController::class, 'confirm'])
      ->name('reservations.confirm');
 
 
-     Route::get('/payment-return', function() {
+Route::get('/payment-return', function() {
         return redirect()->route('reservations')->with('status', 'Paiement confirmé !');
     })->name('payment.return');
 
@@ -29,9 +38,9 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Route publique pour les créneaux
-    Route::get('/slots/{date}', [SlotController::class, 'getAvailableSlots'])
-    ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}')
-    ->name('slots.byDate');
+    // Route::get('/slots/{date}', [SlotController::class, 'getAvailableSlots'])
+    // ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+    // ->name('slots.byDate');
     
     // Vérification téléphone
     Route::get('/verify-phone', [PhoneVerificationController::class, 'show'])->name('verification.notice');

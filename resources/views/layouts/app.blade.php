@@ -13,7 +13,15 @@
 
         <meta name="csrf-token" content="{{ csrf_token() }}">
         
-        {{-- <script src="https://js.stripe.com/v3/"></script> --}}
+           <!-- Stripe JS -->
+        <script src="https://js.stripe.com/v3/"></script>
+
+        <!-- Définir les variables globales avant le chargement des scripts -->
+        <script>
+            window.STRIPE_PUBLISHABLE_KEY = '{{ config('services.stripe.key') }}';
+            window.STORE_RESERVATION_URL = '{{ route('reservations.store') }}';
+            console.log("Stripe key:", window.STRIPE_PUBLISHABLE_KEY); // Vérifier dans la console
+        </script>
 
 
         <!-- Scripts -->
@@ -48,10 +56,11 @@
 
         
  
-        <script src="https://js.stripe.com/v3/"></script>
-        <script>
-            window.STRIPE_PUBLISHABLE_KEY = '{{ config('services.stripe.key') }}';            
+        {{-- <script src="https://js.stripe.com/v3/"></script> --}}
+        @yield('scripts')
+        {{-- <script>
+            window.STRIPE_PUBLISHABLE_KEY = '{{ config('services.stripe.key') }}';
             window.STORE_RESERVATION_URL = '{{ route('reservations.store') }}';
-        </script>
+        </script> --}}
     </body>
 </html>
