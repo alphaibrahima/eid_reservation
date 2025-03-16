@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
 
 class Slot extends Model
 {
@@ -27,6 +30,12 @@ class Slot extends Model
     ];
 
 
+        // Ajoutez ce scope de requête
+    public function scopeAvailable(Builder $query): Builder
+    {
+        return $query->where('available', true)
+            ->whereRaw('(SELECT COUNT(*) FROM reservations WHERE slot_id = slots.id) < slots.max_reservations');
+    }
 
     public function reservations(): HasMany
     {
@@ -44,4 +53,22 @@ class Slot extends Model
     {
         return $this->start_time->format('H:i').' - '.$this->end_time->format('H:i');
     }
+
+    public static function availableDays()
+    {
+        return Cache::remember('available_days', 300, function () {
+            return self::available()
+                ->selectRaw('DATE(date) as date, COUNT(*) as slots')
+                ->groupBy('date')
+                ->get();
+        });
+    }
+
+    // Dans la classe Slot
+    public function association(): BelongsTo
+    {
+        return $this->belongsTo(Association::class, 'association_id');
+    }
+
+
 }

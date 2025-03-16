@@ -2,123 +2,235 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Stripe\Stripe;
-use Stripe\PaymentIntent;
-use App\Models\Reservation;
 use App\Models\Slot;
-use App\Models\Association;
-use Illuminate\Support\Facades\Auth;
+use App\Models\Quota;
+use App\Models\Reservation;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
+use Stripe\StripeClient;
+use Stripe\Exception\ApiErrorException;
+use Illuminate\Support\Str;
+use App\Services\ReservationService;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class ReservationController extends Controller
 {
-    public function store(Request $request)
+    protected $reservationService;
+    protected $stripe;
+
+    public function __construct(ReservationService $reservationService)
     {
-        $validatedData = $request->validate([
-            'selectedDay' => 'required|date',
-            'selectedSlot' => 'required|exists:slots,id,association_id,NOT_NULL',
-            'size' => 'required|in:petit,moyen,grand',
-            'quantity' => 'required|integer|min:1|max:5',
-            'payment_method_id' => 'required|string',
-            'amount' => 'required|integer|min:20000'
+        $this->reservationService = $reservationService;
+        $this->stripe = new StripeClient(config('services.stripe.secret'));
+    }
+
+    public function index()
+    {
+        return redirect()->route('reservation.step1');
+    }
+
+    public function step1()
+    {
+        $availableDays = Cache::remember('available_days', now()->addMinutes(15), function () {
+            return Slot::with('association')
+                ->available()
+                ->get()
+                ->groupBy('date')
+                ->mapWithKeys(function ($slots, $date) {
+                    return [
+                        $date => [ // Clé = date brute
+                            'date' => $date,
+                            'formatted_date' => now()->parse($date)->translatedFormat('l j F Y'),
+                            'available_slots' => $slots->sum(...),
+                            'status' => $this->getAvailabilityStatus(...)
+                        ]
+                    ];
+                });
+        });
+
+        return view('reservation.partials.step1-days', [ // ← Correction du nom
+            'currentStep' => 1,
+            'availableDays' => $availableDays
+        ]);
+    }
+
+    public function selectDay(Request $request)
+    {
+        $validated = $request->validate([
+            'day' => 'required|date|after_or_equal:today'
         ]);
 
+        $slot = Slot::whereDate('date', $validated['day'])
+            ->available()
+            ->firstOrFail();
+
+        session()->put('reservation', [
+            'step' => 2,
+            'day' => $validated['day'],
+            'association_id' => $slot->association_id
+        ]);
+
+        return redirect()->route('reservation.step2');
+    }
+
+    public function step2()
+    {
+        $this->validateStep(2);
+
+        $slots = Slot::with('association')
+            ->whereDate('date', session('reservation.day'))
+            ->available()
+            ->orderBy('start_time')
+            ->get();
+
+        // Dans la méthode step2()
+        return view('reservation.partials.step2-hours', [ // ← Correction du nom
+            'currentStep' => 2,
+            'timeSlots' => $slots,
+            'selectedDayFormatted' => now()->parse(session('reservation.day'))->translatedFormat('l j F Y')
+        ]);
+    }
+
+    public function selectSlot(Request $request)
+    {
+        $this->validateStep(2);
+
+        $validated = $request->validate([
+            'slot_id' => 'required|exists:slots,id'
+        ]);
+
+        $slot = Slot::findOrFail($validated['slot_id']);
+        
+        if (!$slot->isAvailable()) {
+            return back()->withErrors(['slot' => 'Ce créneau n\'est plus disponible']);
+        }
+
+        session()->put('reservation', array_merge(session('reservation'), [
+            'step' => 3,
+            'slot_id' => $validated['slot_id'],
+            'slot_start_time' => $slot->start_time->format('H:i'),
+            'slot_end_time' => $slot->end_time->format('H:i')
+        ]));
+
+        return redirect()->route('reservation.step3');
+    }
+
+    public function step3()
+    {
+        $this->validateStep(3);
+
+        $quota = Quota::where('association_id', session('reservation.association_id'))
+            ->firstOrFail();
+
+        // Dans la méthode step3()
+        return view('reservation.partials.step3-config', [ // ← Correction du nom
+            'currentStep' => 3,
+            'max_quantity' => min(5, $quota->{session('reservation.size', 'grand')} ?? 5),
+            'quota' => $quota
+        ]);
+    }
+
+    public function confirm(Request $request)
+    {
+        $this->validateStep(3);
+
+        $validated = $request->validate([
+            'quantity' => 'required|integer|min:1|max:5',
+            'size' => 'required|in:grand,moyen,petit'
+        ]);
+
+        $quota = Quota::where('association_id', session('reservation.association_id'))
+            ->firstOrFail();
+
+        if ($quota->{$validated['size']} < $validated['quantity']) {
+            return back()->withErrors(['size' => 'Stock insuffisant pour cette taille']);
+        }
+
+        session()->put('reservation', array_merge(session('reservation'), [
+            'step' => 4,
+            'quantity' => $validated['quantity'],
+            'size' => $validated['size']
+        ]));
+
+        return redirect()->route('reservation.step4');
+    }
+
+    public function processPayment(Request $request)
+    {
+        $this->validateStep(4);
+        $reservationData = session('reservation');
+
         try {
-            DB::beginTransaction();
-
-            // Configuration Stripe
-            Stripe::setApiKey(config('services.stripe.secret'));
-
-            // Création du PaymentIntent
-            $paymentIntent = PaymentIntent::create([
-                'amount' => $validatedData['amount'],
+            $paymentIntent = $this->stripe->paymentIntents->create([
+                'amount' => 20000,
                 'currency' => 'eur',
-                'payment_method' => $validatedData['payment_method_id'],
-                'description' => 'Acompte Réservation Agneau',
-                'confirm' => true,
-                'automatic_payment_methods' => [
-                    'enabled' => true,
-                    'allow_redirects' => 'never'
-                ]
+                'metadata' => [
+                    'user_id' => auth()->id(),
+                    'reservation' => json_encode($reservationData)
+                ],
+                'payment_method_types' => ['card'],
+                'description' => 'Acompte réservation agneau Eid'
             ]);
 
-            if (!in_array($paymentIntent->status, ['succeeded', 'requires_capture'])) {
-                throw new \Exception('Paiement échoué : ' . $paymentIntent->status);
-            }
+            $reservation = $this->reservationService->processReservation(
+                $this->reservationService->prepareReservationData(
+                    $reservationData,
+                    $paymentIntent->id
+                )
+            );
 
-            // Récupération et validation du slot
-            $slot = Slot::with('association')->findOrFail($validatedData['selectedSlot']);
-            
-            if (!$slot->association) {
-                throw new \Exception('Ce créneau n\'est associé à aucune organisation');
-            }
+            session()->forget('reservation');
 
-            // Création de la réservation
-            $reservation = Reservation::create([
-                'user_id' => Auth::id(),
-                'slot_id' => $slot->id,
-                'association_id' => $slot->association_id, // Ajout crucial
-                'size' => $validatedData['size'],
-                'quantity' => $validatedData['quantity'],
-                'date' => $validatedData['selectedDay'],
-                'payment_status' => 'paid',
-                'payment_intent_id' => $paymentIntent->id,
-                'total_amount' => $validatedData['amount'] / 100
+            return view('reservation.partials.step4', [
+                'currentStep' => 4,
+                'clientSecret' => $paymentIntent->client_secret,
+                'reservation' => $reservation
             ]);
 
-            // Mise à jour des quotas
-            $this->updateQuota($reservation);
+        } catch (ApiErrorException $e) {
+            Log::error('Stripe Error: ' . $e->getMessage());
+            return redirect()->back()->withErrors(['payment' => $e->getMessage()]);
 
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'reservation_number' => 'R-' . $reservation->id,
-                'message' => 'Réservation confirmée',
-                'details' => [
-                    'day' => $reservation->date->format('l d F Y'),
-                    'time' => $slot->start_time,
-                    'size' => $reservation->size,
-                    'quantity' => $reservation->quantity,
-                    'association' => $slot->association->name
-                ]
-            ]);
-
-        } catch (\Stripe\Exception\CardException $e) {
-            DB::rollBack();
-            return $this->errorResponse('Erreur de paiement : ' . $e->getMessage(), 400);
         } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error("Erreur réservation : {$e->getMessage()}\n{$e->getTraceAsString()}");
-            return $this->errorResponse('Erreur interne : ' . $e->getMessage(), 500);
+            Log::error('Reservation Error: ' . $e->getMessage());
+            return redirect()->route('reservation.partials.step1')->withErrors(['global' => $e->getMessage()]);
         }
     }
 
-    private function updateQuota(Reservation $reservation)
+    public function generatePdf($code)
     {
-        $association = Association::findOrFail($reservation->association_id);
-        $quota = $association->quota()->firstOrCreate();
+        $reservation = Reservation::with(['slot.association', 'user'])
+            ->where('code', $code)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
 
-        $sizeField = match($reservation->size) {
-            'petit' => 'petit',
-            'moyen' => 'moyen',
-            'grand' => 'grand',
-            default => throw new \Exception('Taille invalide')
+        $pdf = Pdf::loadView('pdf.reservation', [
+            'reservation' => $reservation,
+            'date' => now()->parse($reservation->slot->date)->translatedFormat('l j F Y'),
+            'time' => $reservation->slot->start_time->format('H:i')
+        ]);
+
+        return $pdf->download("reservation-{$code}.pdf");
+    }
+
+    private function validateStep($requiredStep)
+    {
+        $currentStep = session('reservation.step', 1);
+        
+        if ($currentStep < $requiredStep) {
+            abort(redirect()->route('reservation.step' . $currentStep)
+                ->withErrors(['step' => 'Veuillez compléter les étapes précédentes']));
+        }
+    }
+
+    private function getAvailabilityStatus($totalCapacity)
+    {
+        return match(true) {
+            $totalCapacity === 0 => 'complet',
+            $totalCapacity < 5 => 'presque_complet',
+            default => 'disponible'
         };
-
-        if ($quota->$sizeField < $reservation->quantity) {
-            throw new \Exception("Quota insuffisant pour {$reservation->size} ({$quota->$sizeField} restants)");
-        }
-
-        $quota->decrement($sizeField, $reservation->quantity);
-    }
-
-    private function errorResponse($message, $statusCode)
-    {
-        return response()->json([
-            'success' => false,
-            'message' => $message
-        ], $statusCode);
     }
 }

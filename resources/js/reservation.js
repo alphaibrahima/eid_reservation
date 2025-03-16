@@ -98,3 +98,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.handleDaySelection = handleDaySelection;
 window.handleSlotSelection = handleSlotSelection;
 window.goToStep = goToStep;
+
+// Ajouter ceci à la fin du fichier
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.creneaux-jour').forEach(card => {
+        card.addEventListener('click', (e) => {
+            const date = e.currentTarget.dataset.date;
+            handleDaySelection(date);
+        });
+    });
+});
